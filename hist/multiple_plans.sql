@@ -38,7 +38,9 @@ select
 from stat st
     left join (
         select
-            sql_id, plan_hash_value, round(sum(elapsed_time_delta) / greatest(sum(executions_delta), 1) / 1e6, 4) AS ela
+            sql_id, 
+            plan_hash_value, 
+            round(sum(elapsed_time_delta) / greatest(sum(executions_delta), 1) / 1e6, 4) AS ela
         from stat
         group by sql_id,
             plan_hash_value
