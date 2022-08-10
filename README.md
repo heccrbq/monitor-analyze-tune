@@ -2,6 +2,7 @@ Oracle Database
 --------------------------
 
   Remote Diagnostics Agent (RDA):  
+  
     RDA includes a suite of data collection and diagnostic scripts that aid in analysis and support of
     Oracle products. Use of these tools helps you more efficiently optimize system performance and
     security, as well as manage pre-installation, upgrade, and setup activities.
