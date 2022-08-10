@@ -10,6 +10,7 @@ Oracle Database
     • Bundled with on-board tools (Network Advisor, Ora-600, and RAC and EM Post checks).
     
   Operating System Watcher (OSW):
+  
     OSW is a collection of UNIX shell scripts intended to collect and archive operating system and
     network metrics to aid in diagnosing performance issues. OSW operates as a set of background
     processes on the server and gathers OS data, invoking such Unix utilities as vmstat, netstat and
@@ -20,6 +21,7 @@ Oracle Database
     • Invokes distinct operating system utilities with defined background process as data collectors.
     
   PL/SQL Tuning Scripts:
+  
     The PL/SQL tuning scripts are a set of tools used to diagnose performance related issues.
     • PL/SQL Profiler – identifies lines of PL/SQL code which are taking longer to process.
     • SQLTXPLAIN Plan - generates comprehensive reports, including the explain plan for a given
