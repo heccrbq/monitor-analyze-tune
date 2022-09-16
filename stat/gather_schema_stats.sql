@@ -11,7 +11,7 @@ select * from user_tab_statistics where stattype_locked is not null;
 select timestamp'2022-09-09 12:34:56' /*подставляем время запуска сбора статы*/ from dual;
     
 -- #3. Запрос мониторинга какие объекты были залочены, а какие попадут в общий сбор статы
-select * from user_tab_statistics where stattype_locked is null and last_analyzed <= timestamp'2022-09-09 12:34:56' /*подставляем время запуска сбора статы*/
+select * from user_tab_statistics where stattype_locked is null and last_analyzed <= timestamp'2022-09-09 12:34:56'; /*подставляем время запуска сбора статы*/
 
 -- #4. Выключить определенные таблицы из общего сбора статистики
 begin
