@@ -33,7 +33,7 @@ begin
 					and stattype_locked is null
     )
     loop
-        dbms_stats.lock_table_stats(user, i.table_name);
+        dbms_stats.lock_table_stats(user, '"' || i.table_name || '"');
     end loop;
 end;
 /
@@ -49,7 +49,7 @@ end;
 begin
     for i in (select * from user_tab_statistics where stattype_locked is not null)
     loop
-        dbms_stats.unlock_table_stats (user, i.table_name);
+        dbms_stats.unlock_table_stats (user, '"' || i.table_name || '"');
     end loop;
 end;
 /
