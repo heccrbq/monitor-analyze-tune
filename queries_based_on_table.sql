@@ -7,7 +7,6 @@ queries as (
 ,
 stat as (
     select q.sql_id sqlid, s.plan_hash_value phv, 
-        to_char(substr(q.sql_text, 1, 4000)) sql_text,
         trunc(w.begin_interval_time) tl,
         s.executions_delta        e,
         s.elapsed_time_delta      ela,
@@ -22,6 +21,8 @@ stat as (
         s.rows_processed_delta    r,
         s.parse_calls_delta       pc,
         s.px_servers_execs_delta  px,
+        s.module,
+        to_char(substr(q.sql_text, 1, 4000)) sql_text,
         dense_rank()over(partition by s.sql_id order by trunc(w.begin_interval_time) desc) drnk
     from queries q 
         left join dba_hist_sqlstat s on s.sql_id = q.sql_id
@@ -43,12 +44,14 @@ select
     round(sum(s.lio)   / greatest(sum(s.e), 1)) AS lio,
     round(sum(s.r)     / greatest(sum(s.e), 1)) AS r,
     round(sum(s.pc)    / greatest(sum(s.e), 1)) AS pc,
-    round(sum(s.px)    / greatest(sum(s.e), 1)) AS px
-    ,s.sql_text
+    round(sum(s.px)    / greatest(sum(s.e), 1)) AS px,
+    s.module,
+    s.sql_text
 from stat s
 where s.drnk = 1
+    and s.module <> 'PL/SQL Developer'
 --    and s.sqlid = '11f175mbhbvsp'
-group by s.sqlid, 
+group by s.sqlid,  s.module,
 --    s.phv,
     s.sql_text,
     s.tl
