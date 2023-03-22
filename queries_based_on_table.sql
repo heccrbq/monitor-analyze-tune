@@ -32,7 +32,7 @@ select
 --    s.phv,
     s.tl,
     sum(s.e)                                             AS e,
-    round(sum(s.e)     / greatest(sum(s.e), 1) / 1e3, 4) AS ela,
+    round(sum(s.ela)   / greatest(sum(s.e), 1) / 1e3, 4) AS ela,
     round(sum(s.cpu)   / greatest(sum(s.e), 1) / 1e3, 4) AS cpu,
     round(sum(s.io)    / greatest(sum(s.e), 1) / 1e3, 4) AS io,
     round(sum(s.cc)    / greatest(sum(s.e), 1) / 1e3, 4) AS cc,
