@@ -6,7 +6,8 @@ queries as (
 )
 ,
 stat as (
-    select q.sql_id sqlid, s.plan_hash_value phv, --q.sql_text,
+    select q.sql_id sqlid, s.plan_hash_value phv, 
+        to_char(substr(q.sql_text, 1, 4000)) sql_text,
         trunc(w.begin_interval_time) tl,
         s.executions_delta        e,
         s.elapsed_time_delta      ela,
@@ -43,11 +44,12 @@ select
     round(sum(s.r)     / greatest(sum(s.e), 1)) AS r,
     round(sum(s.pc)    / greatest(sum(s.e), 1)) AS pc,
     round(sum(s.px)    / greatest(sum(s.e), 1)) AS px
---    ,s.sql_text
+    ,s.sql_text
 from stat s
 where s.drnk = 1
 --    and s.sqlid = '11f175mbhbvsp'
 group by s.sqlid, 
 --    s.phv,
+    s.sql_text,
     s.tl
-order by tl desc nulls last
+order by tl desc nulls last;
