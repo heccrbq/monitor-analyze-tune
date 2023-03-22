@@ -52,4 +52,4 @@ group by s.sqlid,
 --    s.phv,
     s.sql_text,
     s.tl
-order by tl desc nulls last;
+order by ela * greatest(e, 1) desc nulls last;
