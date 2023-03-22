@@ -49,7 +49,7 @@ select
     s.sql_text
 from stat s
 where s.drnk = 1
-    and s.module <> 'PL/SQL Developer'
+--    and s.module <> 'PL/SQL Developer'
 --    and s.sqlid = '11f175mbhbvsp'
 group by s.sqlid,  s.module,
 --    s.phv,
