@@ -37,13 +37,13 @@ with jbprfx as (
 )
 
 select 
-    jb.job_prefix, jb.sid, jb.serial#, ash.sql_id, min(jb.start_snap_id) || '-' ||  max(jb.stop_snap_id) range_snap, 
+    jb.job_prefix, ash.sql_id, min(jb.start_snap_id) || '-' ||  max(jb.stop_snap_id) range_snap, 
     count(distinct sql_exec_id || to_char(sql_exec_start, 'yyyymmddhh24:mi:ss')) unq_run, count(1) rowcount, sum(tm_delta_db_time) db_time, sum(tm_delta_cpu_time) cpu_time
 from jbprfx jb left join dba_hist_active_sess_history ash 
     on ash.snap_id between jb.start_snap_id and jb.stop_snap_id 
     and ash.session_id = jb.sid 
     and ash.session_serial# = jb.serial#
-group by grouping sets ((jb.job_prefix, jb.sid, jb.serial#, ash.sql_id), null)
+group by grouping sets ((jb.job_prefix, ash.sql_id), null)
 order by job_prefix, rowcount desc;
 
 -- #4
