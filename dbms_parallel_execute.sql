@@ -10,6 +10,7 @@ with jbprfx as (
         min(cpu_used) min_cpu_used, max(cpu_used) max_cpu_used
     from dba_scheduler_job_run_details 
     where regexp_like (job_name, '^TASK\$_\d+_\d+$')
+        and req_start_date >= (select sysdate - retention - 1 from dba_hist_wr_control)
     group by regexp_substr(job_name, '^TASK\$_\d+')
 )
 
