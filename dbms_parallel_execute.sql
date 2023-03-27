@@ -194,3 +194,52 @@ from index_list_tab_space ilts
 --    or (greatest(ou.used, iu.last_used) <= sysdate - (select depth from source))
 order by index_total_mb desc nulls last;
 
+
+
+with source as (
+    select '25ba6pqzmb88d' sql_id, 819029706 plan_hash_value, 17733050 sql_exec_id from dual
+)
+select 
+    decode(t.column_value, 0, null, spm.plan_line_id) id, --sp.parent_id, nullif(sp.depth - 1, -1) depth, 
+    -- sql_id, cn = sql child number, hv = plan hash value, ela = elapsed time per seconds, disk = physical read, lio = consistent gets (cr + cu), r = rows processed
+    case when t.column_value = 0 and rownum = 1 then --null
+            'SQL_ID = ' || spm.sql_id || 
+            ', phv = '  || spm.sql_plan_hash_value ||
+            ', eid = '  || spm.sql_exec_id 
+          when t.column_value = 0 then  
+            (select 
+                'SQLSTAT: ' ||
+                ', e = '    || s.delta_execution_count || 
+                ', ela = '  || to_char(round(s.delta_elapsed_time / 1e6, 2), 'fm999G990D00', 'nls_numeric_characters=''. ''') || 
+                ', cpu = '  || to_char(round(s.delta_cpu_time / 1e6, 2), 'fm999G990D00', 'nls_numeric_characters=''. ''') || 
+                ', io = '   || to_char(round(s.delta_user_io_wait_time / 1e6, 2), 'fm999G990D00', 'nls_numeric_characters=''. ''') ||
+                ', cc = '   || to_char(round(s.delta_concurrency_time / 1e6, 2), 'fm999G990D00', 'nls_numeric_characters=''. ''') ||
+                ', parse = '|| to_char(round(s.avg_hard_parse_time / 1e6, 2), 'fm999G990D00', 'nls_numeric_characters=''. ''') ||
+                ', disk = ' || s.delta_disk_reads ||
+                ', lio = '  || s.delta_buffer_gets || 
+                ', r = '    || s.delta_rows_processed ||
+                ', px = '   || s.delta_px_servers_executions
+            from v$sqlstats s where s.sql_id = src.sql_id and s.plan_hash_value = src.plan_hash_value)
+          else
+        --
+        lpad(' ', 4 * spm.plan_depth) || spm.plan_operation || --nvl2(spm.plan_optimizer, '  Optimizer=' || spm.plan_optimizer, null) ||
+        nvl2(spm.plan_options, ' (' || spm.plan_options || ')', null) || 
+        nvl2(spm.plan_object_name, ' OF ''' || nvl2(spm.plan_object_owner, spm.plan_object_owner || '.', null) || spm.plan_object_name || '''', null) ||
+        decode(spm.plan_object_type, 'INDEX (UNIQUE)', ' (UNIQUE)') ||
+        '  (Cost=' || spm.plan_cost || ' Card=' || spm.plan_cardinality || ' Bytes=' || spm.plan_bytes || ')'
+        end sqlplan, 
+    spm.starts,
+    spm.output_rows a_rows,
+    numtodsinterval(spm.last_refresh_time - spm.first_refresh_time, 'day') a_time,
+    spm.physical_read_requests + spm.physical_write_requests rwreq,
+    spm.physical_read_bytes + spm.physical_write_bytes rwbyt,
+    spm.workarea_max_mem max_mem,
+    spm.workarea_max_tempseg max_temp
+--    ,sp.access_predicates
+--    ,sp.filter_predicates
+--	,sp.projection
+from source src
+    left join v$sql_plan_monitor spm on spm.sql_id = src.sql_id and spm.sql_plan_hash_value = src.plan_hash_value and spm.sql_exec_id = src.sql_exec_id
+    left join table(sys.odcinumberlist(0,0,1)) t on t.column_value >= spm.plan_line_id
+--where s.sql_id = '4m7aatg5uw8sh'
+order by spm.sql_plan_hash_value, spm.plan_line_id, t.column_value;
