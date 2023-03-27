@@ -19,7 +19,7 @@ select
 from jbprfx jb 
     left join dba_parallel_execute_tasks pet 
     on pet.job_prefix = jb.job_prefix
-order by trunc(jb.job_start_date) desc, max_cpu_used desc;
+order by max_duration desc;
 
 -- #3
 with jbprfx as (
@@ -33,13 +33,14 @@ with jbprfx as (
         (select snap_id from dba_hist_snapshot sn where req_start_date+run_duration between sn.begin_interval_time and sn.end_interval_time) stop_snap_id
     from dba_scheduler_job_run_details 
     where regexp_like (job_name, '^TASK\$_\d+_\d+$')
-        and job_name like 'TASK$_295942%'
+        and job_name like 'TASK$_296184%'
 --        and trunc(req_start_date) = date'2023-01-26'
 )
 
 select 
     jb.job_prefix, ash.sql_id, min(jb.start_snap_id) || '-' ||  max(jb.stop_snap_id) range_snap, 
-    count(distinct sql_exec_id || to_char(sql_exec_start, 'yyyymmddhh24:mi:ss')) unq_run, count(1) rowcount, sum(tm_delta_db_time) db_time, sum(tm_delta_cpu_time) cpu_time
+    count(distinct sql_exec_id || to_char(sql_exec_start, 'yyyymmddhh24:mi:ss')) unq_run, count(1) rowcount, 
+    round(sum(tm_delta_db_time)/1e6) db_time, round(sum(tm_delta_cpu_time)/1e6) cpu_time
 from jbprfx jb left join dba_hist_active_sess_history ash 
     on ash.snap_id between jb.start_snap_id and jb.stop_snap_id 
     and ash.session_id = jb.sid 
@@ -47,9 +48,16 @@ from jbprfx jb left join dba_hist_active_sess_history ash
 group by grouping sets ((jb.job_prefix, ash.sql_id), null)
 order by job_prefix, rowcount desc;
 
+
+
+select * from dba_hist_sqltext where sql_id = '83cgp9nfu5f3n';
+select * from table(dbms_xplan.display_awr('bzbnu7nbkhbkp'));
+
+
+
 -- #4
 with source as (
-    select '4423c6j0udsqj' sql_id, trunc(sysdate) - 30 btime, trunc(sysdate) + 1 etime from dual
+    select '83cgp9nfu5f3n' sql_id, trunc(sysdate) - 30 btime, trunc(sysdate) + 1 etime from dual
  )
 select 
 --    (select trim(dbms_lob.substr(t.sql_text, 4000)) from dba_hist_sqltext t where s.sql_id = t.sql_id) AS text,
@@ -82,4 +90,107 @@ group by trunc(w.begin_interval_time),
 order by tl desc;
 
 -- #5
-select * from table(dbms_xplan.display_awr('4423c6j0udsqj',1997761311));
+
+
+ with source as (
+    select 'A4M' index_owner, sys.odcivarchar2list('SYS_C004457163 ') index_list from dual
+)
+select 
+    i.owner index_owner, 
+    i.index_name, 
+--    i.table_owner, 
+--    i.table_name, 
+    i.partitioned,
+    i.num_rows, 
+    i.distinct_keys,
+    ca.avg_row_len, 
+    i.blevel, 
+    i.leaf_blocks, 
+--    i.avg_leaf_blocks_per_key,
+--    i.avg_data_blocks_per_key,    
+    round(s.bytes/1024/1024, 3) allocated_for_segment_mb,
+    round(i.num_rows * ca.avg_row_len / 1024 / 1024, 3) used_by_data_mb,
+    -- 12 = 10 bytes for rowid + 2 bytes for the index row header
+    round((i.num_rows * 12 + ca.avg_rowset_len * (1 + i.pct_free/100))/ 1024 / 1024, 3) estimated_index_size_mb,
+    round((i.num_rows * 12 + ca.avg_rowset_len * (1 + i.pct_free/100)) / s.bytes * 100, 2) pct_used
+from dba_indexes i
+    join dba_segments s on s.owner = i.owner and s.segment_name = i.index_name
+    outer apply (
+        select 
+            sum(tcs.avg_col_len) avg_row_len,
+            sum((ins.num_rows - tcs.num_nulls) * tcs.avg_col_len) avg_rowset_len            
+        from dba_tables t 
+            join dba_tab_col_statistics tcs on tcs.owner = t.owner and tcs.table_name = t.table_name
+            join dba_ind_columns ic on ic.index_owner = i.owner and ic.index_name = i.index_name and tcs.column_name = ic.column_name
+            join dba_ind_statistics ins on ins.owner = ic.index_owner and ins.index_name = ic.index_name
+        where t.table_name = i.table_name and t.owner = i.table_owner
+    ) ca
+where (i.owner, i.index_name) in (select /*+dynamic_sampling(3)*/ s.index_owner, column_value from source s, table(s.index_list) t)
+order by pct_used;
+
+
+
+with source as (
+    select 'A4M' index_owner, interval'12'month depth from dual
+),
+--index_list_out_of_plan(index_owner, index_name) as (
+--    -- индекс не был найден в dba_hist_sql_plan и в v$sql_plan
+--    select 
+--        owner, object_name 
+--    from (
+--        select do.owner, do.object_name, sp.sql_id from dba_objects do 
+--            left join dba_hist_sql_plan sp on sp.object# = do.object_id where do.object_type = 'INDEX' and do.owner = (select index_owner from source)
+--        union all
+--        select do.owner, do.object_name, sp.sql_id from dba_objects do 
+--            left join gv$sql_plan sp on sp.object# = do.object_id where do.object_type = 'INDEX' and do.owner = (select index_owner from source)
+--    )
+--    group by owner, object_name 
+--    having max(sql_id) is null
+--),
+index_list_tab_space as (
+    -- добавляем к индексам инфу из таблицы и сегмента
+    select
+        di.owner index_owner, di.index_name, di.uniqueness, 
+        dt.owner table_owner, dt.table_name, dt.last_analyzed, dt.monitoring,
+        round(sum(bytes)/1024/1024, 3) index_total_mb
+    from /*index_list_out_of_plan iloop
+        inner join */dba_indexes di --on di.owner = iloop.index_owner and di.index_name = iloop.index_name
+        inner join dba_tables dt on dt.owner = di.table_owner and dt.table_name = di.table_name
+        inner join dba_segments ds on ds.owner = di.owner and ds.segment_name = di.index_name
+    where di.table_name = 'UBRR_CB_TRANSACTIONS'
+--    where dt.table_name not like 'TTX$%' and dt.table_name not like 'TDS$%' --and dt.table_name not like 'HCF_%'
+    group by di.owner, di.index_name, di.uniqueness, 
+        dt.owner, dt.table_name, dt.last_analyzed, dt.monitoring
+)
+
+select
+    -- common --
+    ilts.index_owner, 
+    ilts.index_name, 
+    ilts.table_name, 
+    ilts.uniqueness, 
+    uc.constraint_type, 
+    ilts.index_total_mb,
+    -- monitoring --
+    ilts.monitoring tbl_monitoring, 
+    ou.monitoring idx_monitoring, 
+    ou.used index_used, 
+    to_date(ou.start_monitoring, 'mm/dd/yyyy hh24:mi:ss') start_index_monitoring,
+    iu.last_used last_index_used, 
+    -- dml stats -- 
+    ilts.last_analyzed, 
+    dm.timestamp last_data_modification, 
+    dm.inserts, 
+    dm.updates, 
+    dm.deletes, 
+    round((dm.inserts + dm.updates + dm.deletes) / ((dm.timestamp - ilts.last_analyzed) * 1440)) row_modified_per_minute
+from index_list_tab_space ilts
+    left join dba_index_usage iu on iu.owner = ilts.index_owner and iu.name = ilts.index_name
+    left join user_object_usage ou on ou.index_name = ilts.index_name and ou.table_name = ilts.table_name
+    left join dba_tab_modifications dm on dm.table_owner = ilts.table_owner and dm.table_name = ilts.table_name and dm.partition_name is null
+    left join user_constraints uc on uc.index_owner = ilts.index_owner and uc.index_name = ilts.index_name
+--where (ou.used is null and ou.monitoring = 'YES')
+--    or (iu.last_used is null and exists (select 0 from v$index_usage_info where index_stats_enabled = 1))
+--    or (greatest(ou.used, iu.last_used) <= sysdate - (select depth from source))
+order by index_total_mb desc nulls last;
+
