@@ -243,3 +243,33 @@ from source src
     left join table(sys.odcinumberlist(0,0,1)) t on t.column_value >= spm.plan_line_id
 --where s.sql_id = '4m7aatg5uw8sh'
 order by spm.sql_plan_hash_value, spm.plan_line_id, t.column_value;
+
+
+--# поиск запросов по всем запускам джобов
+with jbprfx as (
+    select 
+        regexp_substr(job_name, '^TASK\$_\d+') job_prefix,
+        to_number(substr(session_id, 1, instr(session_id, ',')-1)) sid, 
+        to_number(substr(session_id, instr(session_id, ',')+1)) serial#,
+        count(distinct session_id)over(partition by regexp_substr(job_name, '^TASK\$_\d+')) job_count,
+        req_start_date,
+        run_duration,
+        (select snap_id from dba_hist_snapshot sn where req_start_date between sn.begin_interval_time and sn.end_interval_time) start_snap_id,
+        (select snap_id from dba_hist_snapshot sn where req_start_date+run_duration between sn.begin_interval_time and sn.end_interval_time) stop_snap_id
+    from dba_scheduler_job_run_details 
+    where regexp_like (job_name, '^TASK\$_\d+_\d+$')
+        and req_start_date >= (select sysdate - retention - 1 from dba_hist_wr_control)
+)
+
+select 
+    jb.job_prefix, jb.job_count, min(jb.req_start_date) min_start_date, max(jb.run_duration) max_duration,
+    ash.sql_id, min(jb.start_snap_id) || '-' ||  max(jb.stop_snap_id) range_snap, 
+    count(distinct sql_exec_id || to_char(sql_exec_start, 'yyyymmddhh24:mi:ss')) unq_run, count(1) rowcount, 
+    round(sum(tm_delta_db_time)/1e6) db_time, round(sum(tm_delta_cpu_time)/1e6) cpu_time
+from jbprfx jb left join dba_hist_active_sess_history ash 
+    on ash.snap_id between jb.start_snap_id and jb.stop_snap_id 
+    and ash.session_id = jb.sid 
+    and ash.session_serial# = jb.serial#
+group by jb.job_prefix, jb.job_count, ash.sql_id
+having sum(tm_delta_db_time) is not null
+order by db_time desc;
